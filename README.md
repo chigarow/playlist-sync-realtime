@@ -106,6 +106,15 @@ pip install -r requirements.txt
 python app.py
 ```
 
+To keep the service running after you disconnect from an SSH session, use the nohup wrapper script:
+
+```bash
+./run_playlist_sync.sh
+tail -f logs/playlist-sync.log   # optional: follow the output
+```
+
+The script automatically activates `.venv` if it exists, stores the PID in `logs/playlist-sync.pid`, and appends output to `logs/playlist-sync.log`. Override `LOG_DIR`, `PID_FILE`, `LOG_FILE`, or `PYTHON_BIN` if you need custom locations.
+
 Open a browser on the device and visit `http://127.0.0.1:8080/`. The dashboard lets you:
 1. Run the OAuth flows for Spotify and YouTube Music (buttons redirect to official login pages).
 2. Paste the Apple Music developer token and authorize via MusicKit.
