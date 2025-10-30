@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Playlist Sync Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0 16px 48px;
+            background: #f5f5f5;
+        }
+        header {
+            padding: 24px 0 16px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            flex: 1;
+            min-width: 280px;
+        }
+        .card h2 {
+            margin-top: 0;
+        }
+        button {
+            background: #0059ff;
+            border: none;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: bold;
+        }
+        select, input[type="text"], textarea {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background: #fafafa;
+        }
+        .status-pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+        .ok {
+            background: #d1f5d3;
+            color: #187a00;
+        }
+        .warn {
+            background: #fde0bf;
+            color: #8d4a00;
+        }
+        .danger {
+            background: #ffdddd;
+            color: #9d0000;
+        }
+    </style>
+    <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Playlist Sync Service</h1>
+        <p>Running on {{ host }}:{{ port }}</p>
+    </header>
+
+    <section class="cards">
+        <div class="card">
+            <h2>Spotify
+                {% if statuses.spotify.authenticated %}
+                    <span class="status-pill ok">Connected</span>
+                {% elif statuses.spotify.configured %}
+                    <span class="status-pill warn">Configured</span>
+                {% else %}
+                    <span class="status-pill danger">Missing Credentials</span>
+                {% endif %}
+            </h2>
+            <p>OAuth will open a Spotify login page. Define <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in the environment beforehand.</p>
+            <button onclick="startAuth('spotify')" {% if not statuses.spotify.configured %}disabled{% endif %}>
+                Connect Spotify
+            </button>
+        </div>
+
+        <div class="card">
+            <h2>Apple Music
+                {% if statuses.apple_music.authenticated %}
+                    <span class="status-pill ok">Connected</span>
+                {% elif statuses.apple_music.configured %}
+                    <span class="status-pill warn">Developer Token Set</span>
+                {% else %}
+                    <span class="status-pill danger">Token Needed</span>
+                {% endif %}
+            </h2>
+            <p>Paste a valid developer token from your Apple Developer account, then authorize with Apple Music.</p>
+            <label for="appleDeveloperToken">Developer Token</label>
+            <textarea id="appleDeveloperToken" rows="4" placeholder="Paste developer token here"></textarea>
+            <button onclick="storeAppleDeveloperToken()">Save Developer Token</button>
+            <button onclick="authorizeApple()" style="margin-top:8px;">Authorize with Apple Music</button>
+        </div>
+
+        <div class="card">
+            <h2>YouTube Music
+                {% if statuses.youtube_music.authenticated %}
+                    <span class="status-pill ok">Connected</span>
+                {% elif statuses.youtube_music.configured %}
+                    <span class="status-pill warn">Configured</span>
+                {% else %}
+                    <span class="status-pill danger">Missing Credentials</span>
+                {% endif %}
+            </h2>
+            <p>Define <code>YOUTUBE_CLIENT_ID</code> and <code>YOUTUBE_CLIENT_SECRET</code> in the environment. The flow uses Google's OAuth consent screen.</p>
+            <button onclick="startAuth('youtube_music')" {% if not statuses.youtube_music.configured %}disabled{% endif %}>
+                Connect YouTube Music
+            </button>
+        </div>
+    </section>
+
+    <section class="card" style="margin-top:24px;">
+        <h2>Create Sync Group</h2>
+        <p>Pick the primary playlist (changes propagate outward) and optional targets on other services.</p>
+        <label for="groupName">Group Name</label>
+        <input type="text" id="groupName" placeholder="e.g. Running Mix">
+
+        <label for="primaryService">Primary Service</label>
+        <select id="primaryService">
+            <option value="spotify">Spotify</option>
+            <option value="apple_music">Apple Music</option>
+            <option value="youtube_music">YouTube Music</option>
+        </select>
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;">
+            <div style="flex:1; min-width:200px;">
+                <label for="spotifyPlaylist">Spotify Playlist</label>
+                <select id="spotifyPlaylist">
+                    <option value="">-- select --</option>
+                    {% for playlist in playlists.spotify %}
+                        <option value="{{ playlist.id }}">{{ playlist.name }} ({{ playlist.track_count }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex:1; min-width:200px;">
+                <label for="applePlaylist">Apple Music Playlist</label>
+                <select id="applePlaylist">
+                    <option value="">-- select --</option>
+                    {% for playlist in playlists.apple_music %}
+                        <option value="{{ playlist.id }}">{{ playlist.name }} ({{ playlist.track_count }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex:1; min-width:200px;">
+                <label for="youtubePlaylist">YouTube Music Playlist</label>
+                <select id="youtubePlaylist">
+                    <option value="">-- select --</option>
+                    {% for playlist in playlists.youtube_music %}
+                        <option value="{{ playlist.id }}">{{ playlist.name }} ({{ playlist.track_count }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <button style="margin-top:16px;" onclick="createGroup()">Create Group</button>
+    </section>
+
+    <section class="card" style="margin-top:24px;">
+        <h2>Sync Groups</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Primary</th>
+                    <th>Spotify</th>
+                    <th>Apple Music</th>
+                    <th>YouTube Music</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="groupsTable">
+            {% if groups %}
+                {% for group in groups %}
+                    <tr>
+                        <td>{{ group.name }}</td>
+                        <td>{{ group.primary_service }}</td>
+                        <td>{{ group.playlists.spotify or "—" }}</td>
+                        <td>{{ group.playlists.apple_music or "—" }}</td>
+                        <td>{{ group.playlists.youtube_music or "—" }}</td>
+                        <td><button onclick="deleteGroup('{{ group.id }}')">Delete</button></td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="6">No groups yet.</td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </section>
+
+    <script>
+        function startAuth(service) {
+            window.location.href = `/auth/${service}/start`;
+        }
+
+        async function storeAppleDeveloperToken() {
+            const token = document.getElementById('appleDeveloperToken').value.trim();
+            if (!token) {
+                alert('Developer token is required.');
+                return;
+            }
+            const res = await fetch('/api/apple/developer-token', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({developer_token: token}),
+            });
+            if (!res.ok) {
+                alert('Failed to save token: ' + (await res.text()));
+            } else {
+                alert('Developer token saved.');
+            }
+        }
+
+        async function authorizeApple() {
+            const token = document.getElementById('appleDeveloperToken').value.trim();
+            if (!token) {
+                alert('Please provide a developer token first.');
+                return;
+            }
+            try {
+                if (!window.MusicKit) {
+                    alert('MusicKit JS failed to load. Check network connectivity.');
+                    return;
+                }
+                MusicKit.configure({
+                    developerToken: token,
+                    app: {name: 'playlist-sync', build: '1.0.0'},
+                });
+                const music = MusicKit.getInstance();
+                const musicUserToken = await music.authorize();
+                const res = await fetch('/api/apple/token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        developer_token: token,
+                        music_user_token: musicUserToken,
+                    }),
+                });
+                if (!res.ok) {
+                    alert('Failed to complete Apple Music auth: ' + (await res.text()));
+                } else {
+                    alert('Apple Music connected!');
+                    window.location.reload();
+                }
+            } catch (err) {
+                alert('Apple Music authorization failed: ' + err);
+            }
+        }
+
+        async function createGroup() {
+            const name = document.getElementById('groupName').value.trim();
+            const primary = document.getElementById('primaryService').value;
+            if (!name) {
+                alert('Group name is required.');
+                return;
+            }
+            const playlists = {
+                spotify: document.getElementById('spotifyPlaylist').value || null,
+                apple_music: document.getElementById('applePlaylist').value || null,
+                youtube_music: document.getElementById('youtubePlaylist').value || null,
+            };
+            Object.keys(playlists).forEach(key => {
+                if (!playlists[key]) {
+                    delete playlists[key];
+                }
+            });
+            const payload = {
+                name: name,
+                primary_service: primary,
+                playlists: playlists,
+            };
+            const res = await fetch('/api/groups', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                alert('Failed to create group: ' + (await res.text()));
+            } else {
+                window.location.reload();
+            }
+        }
+
+        async function deleteGroup(id) {
+            const res = await fetch(`/api/groups/${id}`, {method: 'DELETE'});
+            if (!res.ok) {
+                alert('Failed to delete group');
+            } else {
+                window.location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
