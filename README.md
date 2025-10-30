@@ -102,6 +102,7 @@ Apple Music requires a **Developer Token** (valid up to 6 months) and a **Music 
 
 ```bash
 source .venv/bin/activate   # if using a venv
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -155,3 +156,24 @@ pytest --cov=playlist_sync
 ```
 
 Pull requests and contributions are welcome—focus areas include smarter diffing, per-track change propagation, and richer status reporting in the UI.
+
+### Termux: Ruff build failure
+
+On Android/Termux the `ruff` wheel is not published for `aarch64-linux-android`, so `pip install -r dev-requirements.txt` falls back to compiling from source. The bundled `tikv-jemalloc-sys` build script cannot resolve the working directory under Termux, which produces errors such as `ls: cannot access '.': Function not implemented` followed by a failing `maturin` build.
+
+Work around this by installing Ruff as a standalone binary and letting `pip` handle the rest of the tools:
+
+1. Install the other developer dependencies (Pytest, Black, etc.):
+   ```bash
+   pip install pytest==8.0.0 pytest-asyncio==0.23.5 pytest-cov==4.1.0 pytest-mock==3.12.0 black==24.2.0
+   ```
+2. Download Ruff’s prebuilt Android binary, place it somewhere on your `PATH`, and make it executable:
+   ```bash
+   mkdir -p ~/.local/bin
+   curl -L https://github.com/astral-sh/ruff/releases/download/v0.3.0/ruff-aarch64-unknown-linux-android.tar.gz \
+     | tar -xz -C ~/.local/bin ruff
+   chmod +x ~/.local/bin/ruff
+   ```
+   Adjust the version in the URL if `dev-requirements.txt` is updated, and ensure `~/.local/bin` is added to your `PATH` (e.g., by exporting it in `~/.termux/profile`). Verify the installation with `ruff --version`.
+
+With the binary installed, `ruff check playlist_sync` in the examples above will succeed without needing to build from source.
