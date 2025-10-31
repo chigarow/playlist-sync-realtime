@@ -115,6 +115,18 @@ tail -f logs/playlist-sync.log   # optional: follow the output
 
 The script automatically activates `.venv` if it exists, stores the PID in `logs/playlist-sync.pid`, and appends output to `logs/playlist-sync.log`. Override `LOG_DIR`, `PID_FILE`, `LOG_FILE`, or `PYTHON_BIN` if you need custom locations.
 
+Stop the background process when you are done:
+
+```bash
+./stop_playlist_sync.sh
+```
+
+To restart without manually stopping first:
+
+```bash
+./restart_playlist_sync.sh
+```
+
 Open a browser on the device and visit `http://127.0.0.1:8080/`. The dashboard lets you:
 1. Run the OAuth flows for Spotify and YouTube Music (buttons redirect to official login pages).
 2. Paste the Apple Music developer token and authorize via MusicKit.
